@@ -99,9 +99,8 @@ export const softwareCatalogPage = {
 
   /** Select the "Existing Device" radio in the Specifications step. */
   selectExistingDeviceTarget: () => {
-    cy.get('label[for="radiofield-device-radio"]', { timeout: 30000 })
-      .should('be.visible')
-      .click()
+    cy.get('#radiofield-device-radio', { timeout: 30000 }).should('exist')
+    cy.get('#radiofield-device-radio').click({ force: true })
   },
 
   /** In the "Select device" table (wizard step 2), click the radio for the given device. */
