@@ -4,6 +4,7 @@ const path = require('path')
 const os = require('os')
 
 let simulatorProcess = null
+let simulatorProcessParams = null
 
 /**
  * Parses ~/.config/flightctl/client.yaml to extract service.server and
@@ -168,7 +169,25 @@ function registerScaleFleetSimulatorTasks(on) {
      */
     scaleFleetSimulatorStart({ count = 50, label = 'fleet=scale-fleet-00', initialDeviceIndex = 0 } = {}) {
       if (simulatorProcess && !simulatorProcess.killed) {
-        return { alreadyRunning: true, pid: simulatorProcess.pid }
+        const requested = { count, label, initialDeviceIndex }
+        const mismatch = simulatorProcessParams && (
+          simulatorProcessParams.count !== requested.count ||
+          simulatorProcessParams.label !== requested.label ||
+          simulatorProcessParams.initialDeviceIndex !== requested.initialDeviceIndex
+        )
+        if (mismatch) {
+          // A prior suite's simulator (likely from a skipped/failed after() cleanup) is still
+          // alive and this call silently no-ops instead of spawning what was asked for here —
+          // surface it loudly instead of letting the caller time out looking for devices that
+          // were never created with these params.
+          console.warn(
+            `[scaleFleetSimulatorTasks] scaleFleetSimulatorStart called with ${JSON.stringify(requested)} ` +
+            `but a simulator is already running with ${JSON.stringify(simulatorProcessParams)} (pid ${simulatorProcess.pid}). ` +
+            'Reusing the existing process — this suite will NOT get its own devices/label. ' +
+            'A previous spec likely failed before its scaleFleetSimulatorStop cleanup ran.',
+          )
+        }
+        return { alreadyRunning: true, pid: simulatorProcess.pid, paramsMismatch: !!mismatch, runningParams: simulatorProcessParams }
       }
       // Remove stale device data so the simulator re-submits enrollment requests
       // after a backend cleanup (deleted devices leave orphaned dirs that fool the simulator).
@@ -192,6 +211,7 @@ function registerScaleFleetSimulatorTasks(on) {
         '10',
       ]
       simulatorProcess = spawn(bin, args, { stdio: 'ignore' })
+      simulatorProcessParams = { count, label, initialDeviceIndex }
       return { pid: simulatorProcess.pid }
     },
 
@@ -790,6 +810,7 @@ function registerScaleFleetSimulatorTasks(on) {
         }
       }
       simulatorProcess = null
+      simulatorProcessParams = null
       return null
     },
 
