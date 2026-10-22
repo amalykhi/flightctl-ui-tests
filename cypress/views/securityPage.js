@@ -77,11 +77,23 @@ export const CLEAN_IMAGE = {
 
 export const securityPage = {
   getSecurityOverviewCard(timeout = 30000) {
+    // `.filter()` is a query command but is NOT an assertion, so when it's the last
+    // command in the chain (as it was previously) Cypress does not retry the whole
+    // chain for the `timeout` passed to the preceding `.get()` — it only gets the
+    // library default of 4s. That caused spurious "filter never found it" failures
+    // on pages where the card takes longer than 4s (but less than `timeout`) to
+    // render after the rest of the page is visible. Wrapping the filter in a
+    // `.should()` assertion makes Cypress retry the full `.get().should()` chain
+    // for the full `timeout` window, matching the pattern used elsewhere in this
+    // file (see expectVulnerabilityCount).
+    const matchesTitle = ($cards) =>
+      $cards.filter((_, el) => Cypress.$(el).find(CARD_TITLE).text().includes('Security overview'))
+
     return cy.get(CARD, { timeout })
-      .filter((_, el) =>
-        Cypress.$(el).find(CARD_TITLE).text().includes('Security overview'),
-      )
-      .first()
+      .should(($cards) => {
+        expect(matchesTitle($cards).length, 'Security overview card should exist').to.be.gt(0)
+      })
+      .then(($cards) => matchesTitle($cards).first())
   },
 
   /**
